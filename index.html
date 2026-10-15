@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Night Shift VR</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #030303;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+canvas {
+    display: block;
+}
+
+#ui {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    text-shadow: 0 2px 5px black;
+}
+
+#clock {
+    position: absolute;
+    top: 15px;
+    right: 18px;
+    font-size: 23px;
+    text-align: right;
+}
+
+#power {
+    position: absolute;
+    bottom: 20px;
+    left: 18px;
+    font-size: 18px;
+    line-height: 1.7;
+}
+
+#message {
+    position: absolute;
+    top: 15%;
+    width: 100%;
+    text-align: center;
+    font-weight: bold;
+    color: #ff4747;
+    letter-spacing: 2px;
+}
+
+#instructions {
+    position: absolute;
+    bottom: 18px;
+    right: 15px;
+    font-size: 12px;
+    text-align: right;
+    max-width: 230px;
+}
+
+#menu {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: radial-gradient(#202020, #030303 75%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    text-align: center;
+}
+
+.panel {
+    max-width: 540px;
+    padding: 25px;
+    background: #090909;
+    border: 1px solid #732323;
+    box-shadow: 0 0 35px #51000055;
+}
+
+h1 {
+    font-size: clamp(30px, 6vw, 48px);
+    letter-spacing: 4px;
+    color: #eee;
+}
+
+p {
+    color: #bbb;
+    line-height: 1.6;
+}
+
+button {
+    background: #681515;
+    color: white;
+    border: 1px solid #bb4545;
+    padding: 13px 17px;
+    margin: 5px;
+    font-size: 15px;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+button:active {
+    background: #a32323;
+}
+
+#monitorUI {
+    display: none;
+    position: fixed;
+    z-index: 7;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(90vw, 600px);
+    padding: 12px;
+    color: #ddd;
+    background: #050607;
+    border: 3px solid #555;
+    box-shadow: 0 0 35px #000;
+    text-align: center;
+}
+
+#cameraFeed {
+    width: 100%;
+    height: 220px;
+    display: block;
+    background: #101216;
+}
+
+#cameraButtons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#scare {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    background: black;
+    align-items: center;
+    justify-content: center;
+    font-size: min(32vw, 200px);
+    color: red;
+    font-weight: 900;
+    text-shadow: 0 0 35px red;
+    animation: shake .07s infinite;
+}
+
+@keyframes shake {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(8px, -5px); }
+    50% { transform: translate(-7px, 4px); }
+    75% { transform: translate(4px, 7px); }
+}
+
+#vrButton {
+    position: fixed;
+    z-index: 6;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+  <div class="panel">
+    <h1 id="title">NIGHT SHIFT</h1>
+    <p id="description">
+      You are alone in a security office.<br>
+      Something is moving in the darkness.<br><br>
+      Watch the cameras. Conserve your power.
+      Survive until 6 AM.
+    </p>
+
+    <button id="start">START NIGHT</button>
+    <button id="enterVR">ENTER VR</button>
+
+    <p>
+      LEFT CONTROLLER<br>
+      X: Open/close camera monitor<br>
+      Y: Switch wrist monitor side<br>
+      Trigger: Use the selected control<br>
+      Thumbstick: Look around / select cameras
+    </p>
+
+    <p style="font-size:12px">
+      Headphones recommended. Contains sudden scares.
+    </p>
+  </div>
+</div>
+
+<div id="ui">
+  <div id="clock">12 AM<br>NIGHT 1</div>
+
+  <div id="power">
+    POWER: <span id="powerValue">100</span>%<br>
+    USAGE: <span id="usage">■</span>
+  </div>
+
+  <div id="message"></div>
+
+  <div id="instructions">
+    X: Cameras<br>
+    Y: Move wrist monitor<br>
+    Trigger: Interact
+  </div>
+</div>
+
+<div id="monitorUI">
+  <h3>SECURITY SYSTEM</h3>
+  <canvas id="cameraFeed" width="480" height="220"></canvas>
+  <div id="cameraName">CAM 1A — SHOW STAGE</div>
+  <div id="cameraButtons">
+    <button data-cam="0">1A STAGE</button>
+    <button data-cam="1">1B DINING</button>
+    <button data-cam="2">2A WEST HALL</button>
+    <button data-cam="3">2B EAST HALL</button>
+    <button data-cam="4">3 STORAGE</button>
+    <button data-cam="5">4 KITCHEN</button>
+  </div>
+  <button id="lowerMonitor">LOWER MONITOR</button>
+</div>
+
+<div id="scare">!</div>
+
+<div id="vrButton">
+  <button id="vrQuick">ENTER VR</button>
+</div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+/* ==================================================
+   NIGHT SHIFT VR
+   Lightweight WebXR horror game
+   ================================================== */
+
+const $ = id => document.getElementById(id);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030406);
+scene.fog = new THREE.Fog(0x030406, 6, 22);
+
+const camera = new THREE.PerspectiveCamera(
+    75, innerWidth / innerHeight, 0.1, 35
+);
+
+camera.position.set(0, 1.65, 0);
+
+const renderer = new THREE.WebGLRenderer({
+    antialias: false,
+    powerPreference: "high-performance"
+});
+
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+document.body.prepend(renderer.domElement);
+
+/* Lighting */
+
+scene.add(new THREE.HemisphereLight(
+    0x778099, 0x17100b, 0.55
+));
+
+const ceilingLight = new THREE.PointLight(
+    0xffa05b, 2, 8
+);
+
+ceilingLight.position.set(0, 3.5, -2);
+scene.add(ceilingLight);
+
+const emergencyLight = new THREE.PointLight(
+    0x8b0000, 0.5, 6
+);
+
+emergencyLight.position.set(0, 1.5, 2);
+scene.add(emergencyLight);
+
+/* Materials */
+
+function material(color, emissive = 0x000000) {
+    return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 1,
+        metalness: 0,
+        emissive
+    });
+}
+
+const wallMat = material(0x252326);
+const floorMat = material(0x171719);
+const metalMat = material(0x414247);
+const blackMat = material(0x08090b);
+const trimMat = material(0x49332d);
+const bearMat = material(0x624024);
+const rabbitMat = material(0x302044);
+const eyeMat = material(0xff1111, 0xff0000);
+const whiteMat = material(0xd0c9ba);
+const redMat = material(0x680707, 0x220000);
+const greenMat = material(0x13732b, 0x062008);
+
+/* Basic geometry helpers */
+
+function box(parent, x, y, z, w, h, d, mat) {
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        mat
+    );
+
+    mesh.position.set(x, y, z);
+    parent.add(mesh);
+
+    return mesh;
+}
+
+function sphere(parent, x, y, z, radius, mat, sx=1, sy=1, sz=1) {
+    const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 8, 6),
+        mat
+    );
+
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    parent.add(mesh);
+
+    return mesh;
+}
+
+/* ==================================================
+   OFFICE
+   ================================================== */
+
+box(scene, 0, -0.15, -2.3, 7, 0.3, 8, floorMat);
+box(scene, 0, 2.5, -5.8, 7, 5, 0.2, wallMat);
+box(scene, -3.5, 2.5, -2.3, 0.2, 5, 7, wallMat);
+box(scene, 3.5, 2.5, -2.3, 0.2, 5, 7, wallMat);
+box(scene, 0, 4.9, -2.3, 7, 0.2, 7, blackMat);
+
+/* Rear wall decorations */
+
+box(scene, 0, 3.1, -5.67, 2.5, 1.5, 0.04, trimMat);
+
+function makePoster() {
+    const c = document.createElement("canvas");
+    c.width = 512;
+    c.height = 256;
+
+    const ctx = c.getContext("2d");
+
+    ctx.fillStyle = "#211719";
+    ctx.fillRect(0, 0, 512, 256);
+
+    ctx.fillStyle = "#ddd0b5";
+    ctx.font = "bold 48px Arial";
+    ctx.fillText("CELEBRATE!", 48, 65);
+
+    ctx.font = "24px Arial";
+    ctx.fillText("HAVE A GREAT NIGHT", 80, 110);
+
+    ctx.fillStyle = "#60302a";
+    ctx.fillRect(65, 140, 100, 90);
+    ctx.fillRect(205, 140, 100, 90);
+    ctx.fillRect(345, 140, 100, 90);
+
+    const texture = new THREE.CanvasTexture(c);
+
+    const poster = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.4, 1.2),
+        new THREE.MeshBasicMaterial({ map: texture })
+    );
+
+    poster.position.set(0, 3.1, -5.63);
+    scene.add(poster);
+}
+
+makePoster();
+
+/* Desk */
+
+box(scene, 0, 0.85, -1.7, 3.9, 0.18, 1.5, trimMat);
+
+box(scene, -1.6, 0.4, -1.6, 0.16, 0.8, 1.2, blackMat);
+box(scene, 1.6, 0.4, -1.6, 0.16, 0.8, 1.2, blackMat);
+
+/* Fan */
+
+const fan = new THREE.Group();
+fan.position.set(1.2, 1.5, -2);
+scene.add(fan);
+
+const fanRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.32, 0.035, 6, 14),
+    metalMat
+);
+
+fan.add(fanRing);
+
+for (let i = 0; i < 4; i++) {
+    const blade = box(
+        fan, 0, 0.13, 0, 0.1, 0.3, 0.04, metalMat
+    );
+
+    blade.rotation.z = i * Math.PI / 2;
+}
+
+sphere(fan, 0, 0, 0.04, 0.08, metalMat);
+
+/* Desk monitor */
+
+box(scene, 0, 1.55, -2.15, 1.65, 1.05, 0.13, blackMat);
+
+const deskScreen = box(
+    scene, 0, 1.55, -2.075, 1.5, 0.88, 0.025,
+    material(0x151a20)
+);
+
+/* Phone */
+
+box(scene, -1.0, 1.0, -1.5, 0.6, 0.08, 0.35, blackMat);
+box(scene, -1.0, 1.05, -1.5, 0.25, 0.02, 0.16, redMat);
+
+/* ==================================================
+   DOORS
+   ================================================== */
+
+const doors = {};
+
+for (const side of ["left", "right"]) {
+    const sign = side === "left" ? -1 : 1;
+
+    box(
+        scene, sign * 3.15, 2, -0.6,
+        0.22, 4, 1.5, blackMat
+    );
+
+    box(
+        scene, sign * 3.0, 2, -0.6,
+        0.1, 4, 1.6, trimMat
+    );
+
+    const panel = box(
+        scene, sign * 3.0, 2, -0.6,
+        0.13, 3.8, 1.4, metalMat
+    );
+
+    panel.visible = false;
+
+    const light = box(
+        scene, sign * 2.85, 2.15, 0,
+        0.22, 0.3, 0.07, redMat
+    );
+
+    doors[side] = {
+        closed: false,
+        panel,
+        light
+    };
+}
+
+function toggleDoor(side) {
+    if (!playing || dead || power <= 0) return;
+
+    const d = doors[side];
+
+    d.closed = !d.closed;
+    d.panel.visible = d.closed;
+
+    d.light.material = d.closed ? greenMat : redMat;
+
+    notify(
+        side.toUpperCase() +
+        " DOOR " +
+        (d.closed ? "CLOSED" : "OPEN")
+    );
+}
+
+/* ==================================================
+   ANIMATRONICS
+   ================================================== */
+
+function createAnimatronic(type, bodyMat) {
+    const root = new THREE.Group();
+
+    /* Body and head */
+
+    sphere(root, 0, 1.05, 0, 0.43, bodyMat, 1, 1.2, 0.8);
+    sphere(root, 0, 1.75, 0.02, 0.38, bodyMat, 1, 0.95, 0.8);
+
+    /* Eyes */
+
+    sphere(root, -0.16, 1.8, 0.33, 0.105, blackMat);
+    sphere(root, 0.16, 1.8, 0.33, 0.105, blackMat);
+
+    sphere(root, -0.16, 1.8, 0.42, 0.047, eyeMat);
+    sphere(root, 0.16, 1.8, 0.42, 0.047, eyeMat);
+
+    /* Mouth */
+
+    box(root, 0, 1.54, 0.36, 0.32, 0.12, 0.09, blackMat);
+
+    for (const s of [-1, 1]) {
+        sphere(root, s * 0.52, 1.12, 0, 0.15, bodyMat);
+        box(root, s * 0.27, 0.55, 0, 0.2, 0.55, 0.22, bodyMat);
+        box(root, s * 0.18, 0.18, 0.03, 0.25, 0.2, 0.32, blackMat);
+    }
+
+    if (type === "bear") {
+        sphere(root, -0.28, 2.04, 0, 0.13, bodyMat);
+        sphere(root, 0.28, 2.04, 0, 0.13, bodyMat);
+        box(root, 0, 2.18, 0, 0.13, 0.2, 0.1, blackMat);
+    }
+
+    if (type === "rabbit") {
+        sphere(root, -0.14, 2.2, 0, 0.095, bodyMat, 0.5, 1.8, 0.6);
+        sphere(root, 0.14, 2.2, 0, 0.095, bodyMat, 0.5, 1.8, 0.6);
+    }
+
+    return root;
+}
+
+const bear = createAnimatronic("bear", bearMat);
+const rabbit = createAnimatronic("rabbit", rabbitMat);
+
+bear.position.set(-3.0, 0, -0.7);
+rabbit.position.set(3.0, 0, -0.7);
+
+bear.rotation.y = 0.25;
+rabbit.rotation.y = -0.25;
+
+scene.add(bear, rabbit);
+
+const animatronics = [
+    {
+        name: "BEAR",
+        object: bear,
+        side: "left",
+        stage: 0,
+        timer: 0
+    },
+    {
+        name: "RABBIT",
+        object: rabbit,
+        side: "right",
+        stage: 0,
+        timer: 0
+    }
+];
+
+/* ==================================================
+   WRIST MONITOR
+   ================================================== */
+
+/*
+  The wrist monitor is a lightweight 3D panel.
+  Y moves it between the left and right sides.
+  It does not require a right controller.
+*/
+
+const wristMonitor = new THREE.Group();
+
+const wristFrame = box(
+    wristMonitor, 0, 0, 0,
+    0.32, 0.23, 0.035, blackMat
+);
+
+const wristDisplay = box(
+    wristMonitor, 0, 0, 0.022,
+    0.28, 0.19, 0.008, material(0x142020)
+);
+
+const wristTextCanvas = document.createElement("canvas");
+wristTextCanvas.width = 256;
+wristTextCanvas.height = 128;
+
+const wristCtx = wristTextCanvas.getContext("2d");
+
+function drawWrist() {
+    wristCtx.fillStyle = "#071010";
+    wristCtx.fillRect(0, 0, 256, 128);
+
+    wristCtx.fillStyle = "#9fe8c5";
+    wristCtx.font = "bold 20px monospace";
+    wristCtx.fillText("SECURITY", 12, 28);
+
+    wristCtx.font = "16px monospace";
+    wristCtx.fillText("POWER " + Math.ceil(power) + "%", 12, 60);
+    wristCtx.fillText(cameraOpen ? "CAMERA ON" : "STANDBY", 12, 90);
+
+    wristTexture.needsUpdate = true;
+}
+
+const wristTexture = new THREE.CanvasTexture(wristTextCanvas);
+
+wristDisplay.material = new THREE.MeshBasicMaterial({
+    map: wristTexture
+});
+
+scene.add(wristMonitor);
+
+let wristSide = "left";
+
+function positionWristMonitor() {
+    /*
+      Desktop mode: visible in front of the player.
+      VR mode: positioned in the lower peripheral view.
+      Y swaps its side.
+    */
+
+    wristMonitor.position.set(
+        wristSide === "left" ? -0.34 : 0.34,
+        -0.27,
+        -0.62
+    );
+
+    wristMonitor.rotation.set(
+        0.18,
+        wristSide === "left" ? 0.18 : -0.18,
+        wristSide === "left" ? 0.25 : -0.25
+    );
+}
+
+function switchWrist() {
+    wristSide = wristSide === "left" ? "right" : "left";
+    positionWristMonitor();
+
+    notify("WRIST MONITOR: " + wristSide.toUpperCase());
+}
+
+positionWristMonitor();
+
+/* ==================================================
+   CAMERA MONITOR
+   ================================================== */
+
+const feed = $("cameraFeed");
+const feedCtx = feed.getContext("2d");
+
+const cameraNames = [
+    "SHOW STAGE",
+    "DINING ROOM",
+    "WEST HALL",
+    "EAST HALL",
+    "STORAGE ROOM",
+    "KITCHEN"
+];
+
+let cameraOpen = false;
+let selectedCamera = 0;
+
+function drawCameraFeed() {
+    const w = feed.width;
+    const h = feed.height;
+
+    feedCtx.fillStyle = "#080b0e";
+    feedCtx.fillRect(0, 0, w, h);
+
+    feedCtx.fillStyle = "#adb5bd";
+    feedCtx.font = "bold 18px monospace";
+
+    feedCtx.fillText(
+        "CAM " + ["1A", "1B", "2A", "2B", "3", "4"][selectedCamera],
+        12, 24
+    );
+
+    feedCtx.font = "14px monospace";
+    feedCtx.fillText(cameraNames[selectedCamera], 12, 45);
+
+    /* Hallway perspective */
+
+    feedCtx.fillStyle = "#181b20";
+    feedCtx.beginPath();
+    feedCtx.moveTo(80, h);
+    feedCtx.lineTo(180, 65);
+    feedCtx.lineTo(300, 65);
+    feedCtx.lineTo(420, h);
+    feedCtx.fill();
+
+    feedCtx.strokeStyle = "#41464c";
+    feedCtx.lineWidth = 3;
+
+    feedCtx.beginPath();
+    feedCtx.moveTo(180, 65);
+    feedCtx.lineTo(180, h);
+    feedCtx.moveTo(300, 65);
+    feedCtx.lineTo(300, h);
+    feedCtx.stroke();
+
+    /* Static */
+
+    for (let i = 0; i < 180; i++) {
+        feedCtx.fillStyle =
+            "rgba(255,255,255," + (Math.random() * 0.15) + ")";
+
+        feedCtx.fillRect(
+            Math.random() * w,
+            Math.random() * h,
+            2 + Math.random() * 5,
+            1 + Math.random() * 3
+        );
+    }
+
+    const visibleBot = animatronics.find(b =>
+        b.stage > 0 &&
+        (
+            (selectedCamera === 2 && b.side === "left") ||
+            (selectedCamera === 3 && b.side === "right") ||
+            (selectedCamera === 0 && b.stage === 1)
+        )
+    );
+
+    if (visibleBot) {
+        feedCtx.fillStyle = "#17110f";
+        feedCtx.fillRect(190, 75, 110, 125);
+
+        feedCtx.fillStyle = "#ff1717";
+        feedCtx.fillRect(211, 115, 12, 10);
+        feedCtx.fillRect(266, 115, 12, 10);
+
+        feedCtx.fillStyle = "#aaa";
+        feedCtx.fillRect(213, 156, 62, 5);
+    }
+
+    /* Scan lines */
+
+    feedCtx.fillStyle = "rgba(0,0,0,.18)";
+
+    for (let y = 0; y < h; y += 4) {
+        feedCtx.fillRect(0, y, w, 1);
+    }
+
+    $("cameraName").textContent =
+        "CAM " + (selectedCamera + 1) +
+        " — " + cameraNames[selectedCamera];
+}
+
+function toggleCamera() {
+    if (!playing || dead) return;
+
+    cameraOpen = !cameraOpen;
+
+    $("monitorUI").style.display = cameraOpen ? "block" : "none";
+
+    if (cameraOpen) {
+        drawCameraFeed();
+        notify("CAMERA SYSTEM ACTIVE");
+    } else {
+        notify("MONITOR LOWERED");
+    }
+
+    drawWrist();
+}
+
+function selectCamera(i) {
+    selectedCamera = i;
+    drawCameraFeed();
+}
+
+document.querySelectorAll("[data-cam]").forEach(button => {
+    button.addEventListener("click", () => {
+        selectCamera(Number(button.dataset.cam));
+    });
+});
+
+$("lowerMonitor").onclick = toggleCamera;
+
+/* ==================================================
+   GAME STATE
+   ================================================== */
+
+let playing = false;
+let dead = false;
+let power = 100;
+let elapsed = 0;
+let lastTime = performance.now();
+let messageTimer = 0;
+
+function notify(text) {
+    $("message").textContent = text;
+    messageTimer = 2.5;
+}
+
+function resetGame() {
+    playing = true;
+    dead = false;
+    elapsed = 0;
+    power = 100;
+    cameraOpen = false;
+
+    $("menu").style.display = "none";
+    $("scare").style.display = "none";
+    $("monitorUI").style.display = "none";
+
+    for (const side of ["left", "right"]) {
+        doors[side].closed = false;
+        doors[side].panel.visible = false;
+        doors[side].light.material = redMat;
+    }
+
+    for (const bot of animatronics) {
+        bot.stage = 0;
+        bot.timer = 0;
+
+        bot.object.position.set(
+            bot.side === "left" ? -3.0 : 3.0,
+            0,
+            -0.7
+        );
+
+        bot.object.visible = true;
+    }
+
+    $("title").textContent = "NIGHT SHIFT";
+    $("description").innerHTML =
+        "You are alone in a security office.<br>" +
+        "Something is moving in the darkness.<br><br>" +
+        "Watch the cameras. Conserve your power. Survive until 6 AM.";
+
+    notify("12 AM — THE SHIFT HAS STARTED");
+}
+
+$("start").onclick = resetGame;
+
+/* ==================================================
+   SCARE AND GAME OVER
+   ================================================== */
+
+function jumpscare() {
+    if (dead) return;
+
+    dead = true;
+    playing = false;
+    cameraOpen = false;
+
+    $("monitorUI").style.display = "none";
+    $("scare").style.display = "flex";
+
+    $("scare").textContent = "☠";
+
+    /*
+      This is a visual scare effect.
+      Browser audio autoplay restrictions mean sounds
+      should be started after the player presses Start.
+    */
+
+    setTimeout(() => {
+        $("scare").style.display = "none";
+        $("menu").style.display = "flex";
+
+        $("title").textContent = "YOU DIDN'T SURVIVE";
+
+        $("description").innerHTML =
+            "A shape stands outside the office.<br>" +
+            "The footsteps stop.<br><br>" +
+            "Try again — if you dare.";
+    }, 1600);
+}
+
+/* ==================================================
+   ANIMATRONIC AI
+   ================================================== */
+
+function updateAnimatronic(bot, dt) {
+    if (!playing || dead) return;
+
+    bot.timer += dt;
+
+    /*
+      Movement is deliberately gradual and randomized.
+      Checking cameras does not guarantee safety.
+    */
+
+    const interval = Math.max(4, 10 - elapsed / 55);
+
+    if (bot.timer > interval) {
+        bot.timer = 0;
+
+        if (Math.random() < 0.73) {
+            bot.stage = Math.min(3, bot.stage + 1);
+        } else {
+            bot.stage = Math.max(0, bot.stage - 1);
+        }
+
+        if (bot.stage >= 2) {
+            notify(
+                "FOOTSTEPS IN THE " +
+                bot.side.toUpperCase() +
+                " HALL"
+            );
+        }
+    }
+
+    const sign = bot.side === "left" ? -1 : 1;
+
+    bot.object.position.x =
+        sign * (3.0 - bot.stage * 0.42);
+
+    bot.object.position.z =
+        -0.7 + bot.stage * 0.18;
+
+    bot.object.visible = bot.stage > 0 || !cameraOpen;
+
+    if (bot.stage >= 3) {
+        if (doors[bot.side].closed) {
+            /*
+              A closed door stops an attack and pushes
+              the animatronic back into the building.
+            */
+
+            bot.stage = 0;
+
+            bot.object.position.x = sign * 3.0;
+
+            power = Math.max(0, power - 2);
+
+            notify("BANG! SOMETHING HIT THE DOOR");
+        } else if (Math.random() < dt * 0.55) {
+            jumpscare();
+        }
+    }
+}
+
+/* ==================================================
+   LEFT CONTROLLER ONLY
+   ================================================== */
+
+const xrController = renderer.xr.getController(0);
+
+scene.add(xrController);
+
+xrController.addEventListener("selectstart", () => {
+    interact();
+});
+
+let previousButtons = {};
+let previousY = false;
+let previousX = false;
+let previousTrigger = false;
+
+function interact() {
+    if (!playing || dead) return;
+
+    /*
+      Trigger behavior:
+      - If camera monitor is open, cycle cameras.
+      - Otherwise, operate the door on the wrist side.
+    */
+
+    if (cameraOpen) {
+        selectedCamera = (selectedCamera + 1) % cameraNames.length;
+        drawCameraFeed();
+        return;
+    }
+
+    toggleDoor(wristSide);
+}
+
+function readLeftController() {
+    const session = renderer.xr.getSession();
+
+    if (!session) return;
+
+    for (const source of session.inputSources) {
+        if (!source.gamepad) continue;
+
+        /*
+          Ignore the right controller entirely.
+          A missing or broken right controller is fine.
+        */
+
+        if (source.handedness !== "left") continue;
+
+        const gp = source.gamepad;
+
+        /*
+          WebXR standard mapping:
+          Trigger: button 0
+          X: button 4
+          Y: button 5
+
+          Some browser/controller mappings differ, so
+          desktop keyboard alternatives are also provided.
+        */
+
+        const trigger = !!gp.buttons[0]?.pressed;
+        const xButton = !!gp.buttons[4]?.pressed;
+        const yButton = !!gp.buttons[5]?.pressed;
+
+        if (trigger && !previousTrigger) {
+            interact();
+        }
+
+        if (xButton && !previousX) {
+            toggleCamera();
+        }
+
+        if (yButton && !previousY) {
+            switchWrist();
+        }
+
+        previousTrigger = trigger;
+        previousX = xButton;
+        previousY = yButton;
+    }
+}
+
+/* ==================================================
+   DESKTOP TEST CONTROLS
+   ================================================== */
+
+addEventListener("keydown", e => {
+    if (e.repeat) return;
+
+    switch (e.code) {
+        case "KeyY":
+            switchWrist();
+            break;
+
+        case "KeyX":
+            toggleCamera();
+            break;
+
+        case "Space":
+            interact();
+            break;
+
+        case "ArrowLeft":
+            toggleDoor("left");
+            break;
+
+        case "ArrowRight":
+            toggleDoor("right");
+            break;
+
+        case "Escape":
+            if (cameraOpen) toggleCamera();
+            break;
+    }
+});
+
+/* ==================================================
+   VR ENTRY
+   ================================================== */
+
+async function enterVR() {
+    try {
+        if (!navigator.xr) {
+            alert("WebXR is unavailable. Open this page in Quest Browser.");
+            return;
+        }
+
+        const supported =
+            await navigator.xr.isSessionSupported("immersive-vr");
+
+        if (!supported) {
+            alert("VR is unavailable in this browser or page context.");
+            return;
+        }
+
+        const session = await navigator.xr.requestSession(
+            "immersive-vr",
+            {
+                optionalFeatures: [
+                    "local-floor",
+                    "bounded-floor"
+                ]
+            }
+        );
+
+        await renderer.xr.setSession(session);
+
+    } catch (error) {
+        console.error(error);
+
+        alert(
+            "Could not start VR. Open the HTTPS page in Quest Browser " +
+            "and check that VR permissions are enabled."
+        );
+    }
+}
+
+$("enterVR").onclick = enterVR;
+$("vrQuick").onclick = enterVR;
+
+/* ==================================================
+   MAIN LOOP
+   ================================================== */
+
+let flickerTimer = 0;
+
+function animate(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+
+    lastTime = now;
+
+    readLeftController();
+
+    if (playing && !dead) {
+        elapsed += dt;
+
+        const usage =
+            1 +
+            (cameraOpen ? 1 : 0) +
+            (doors.left.closed ? 1 : 0) +
+            (doors.right.closed ? 1 : 0);
+
+        power = Math.max(
+            0,
+            power - dt * (0.10 + usage * 0.045)
+        );
+
+        $("powerValue").textContent = Math.ceil(power);
+        $("usage").textContent = "■".repeat(usage);
+
+        let hour = Math.min(6, Math.floor(elapsed / 60));
+
+        $("clock").innerHTML =
+            (hour === 0 ? "12 AM" : hour + " AM") +
+            "<br>NIGHT 1";
+
+        /*
+          Six minutes of game time represents one night.
+        */
+
+        if (elapsed >= 360) {
+            playing = false;
+
+            $("menu").style.display = "flex";
+            $("title").textContent = "6 AM — YOU SURVIVED!";
+
+            $("description").innerHTML =
+                "The office lights turn on.<br>" +
+                "You made it through the night.<br><br>" +
+                "Ready for another shift?";
+
+            $("start").textContent = "PLAY AGAIN";
+        }
+
+        animatronics.forEach(bot => updateAnimatronic(bot, dt));
+
+        if (power <= 0) {
+            cameraOpen = false;
+            $("monitorUI").style.display = "none";
+
+            doors.left.closed = false;
+            doors.right.closed = false;
+
+            doors.left.panel.visible = false;
+            doors.right.panel.visible = false;
+
+            notify("POWER OUT");
+
+            if (Math.random() < dt * 0.08) {
+                jumpscare();
+            }
+        }
+
+        flickerTimer += dt;
+
+        if (flickerTimer > 0.15) {
+            flickerTimer = 0;
+
+            ceilingLight.intensity =
+                Math.random() < 0.04 ? 0.15 : 1.4;
+        }
+
+        if (messageTimer > 0) {
+            messageTimer -= dt;
+
+            if (messageTimer <= 0) {
+                $("message").textContent = "";
+            }
+        }
+
+        if (cameraOpen) {
+            drawCameraFeed();
+        }
+
+        drawWrist();
+    }
+
+    fan.rotation.z += dt * 0.7;
+
+    renderer.render(scene, camera);
+}
+
+renderer.setAnimationLoop(animate);
+
+/* Resize safely */
+
+addEventListener("resize", () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+/* Initial display */
+
+drawCameraFeed();
+drawWrist();
+
+</script>
+</body>
+</html>
